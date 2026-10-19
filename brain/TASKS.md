@@ -468,7 +468,7 @@ No known product bugs exist because no product code exists.
 - No frontend test framework or CI; backend has only health/config tests.
 - No shared schema/types package between frontend and backend (planned stack).
 - No design system or component library yet.
-- Brain directory is outside the application Git repository; versioning strategy `TBD`.
+- Repository consolidation: the root repo now tracks the frontend, backend, and brain; avoid reintroducing a nested frontend `.git`.
 - Requirements and implementation are far apart; status discipline is required.
 
 ## Related Documents

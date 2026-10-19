@@ -10,14 +10,14 @@ This workspace is **not** a single Next.js application. The frontend and backend
 
 ```text
 .
-├── dpdp-compliance-auditor/   # Next.js frontend (independent Git repository)
+├── dpdp-compliance-auditor/   # Next.js frontend application
 ├── backend/                   # FastAPI backend (independent Python service)
 ├── brain/                     # Product/architecture documentation
 ├── .venv/                     # Shared local Python environment (not committed)
 └── README.md
 ```
 
-The backend is deliberately **not** placed inside the Next.js app. It is a standalone HTTP service with its own dependencies, runtime, and tests.
+The backend is deliberately **not** placed inside the Next.js app. It is a standalone HTTP service with its own dependencies, runtime, and tests. The workspace root is a single Git repository tracking the frontend, backend, and documentation; the frontend is not a nested repository.
 
 ## Current status
 

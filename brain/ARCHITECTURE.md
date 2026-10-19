@@ -30,7 +30,7 @@ flowchart LR
 
 **Verified facts — backend (implemented scaffold):**
 
-- Backend root: `C:\projects\website dpdp analyzer\backend\` (workspace root, a standalone service outside the Next.js app and its Git repository). The virtual environment is `C:\projects\website dpdp analyzer\.venv` (Python 3.12.0, outside Git).
+- Backend root: `C:\projects\website dpdp analyzer\backend\` (workspace root, a standalone service outside the Next.js app; both are tracked in the root Git repository). The virtual environment is `C:\projects\website dpdp analyzer\.venv` (Python 3.12.0, outside Git).
 - `backend/app/main.py` creates the FastAPI application; `backend/app/core/config.py` loads settings from environment/`.env`.
 - `GET /health` returns service status, name, version, and environment.
 - `backend/app/api/health.py` contains the only route.
@@ -39,7 +39,7 @@ flowchart LR
 - No database connection, migrations, queue, crawler, auth, compliance rules, or AI provider exists.
 - Playwright package is installed, but browser binaries have not been downloaded.
 
-**Location resolved (2026-10-19):** the backend remained at the workspace root as a separate service. It is **not** mixed into the Next.js app or its Git repository. The workspace-root `.venv` stays outside Git; commands from `backend/` use `..\.venv\Scripts\python.exe`. Ruff, pytest (3 passed), and mypy passed from this location. The frontend will call the backend over HTTP.
+**Location resolved (2026-10-19):** the backend remained at the workspace root as a separate service. It is **not** mixed into the Next.js app. The workspace root is a single Git repository tracking the frontend, backend, and brain. The workspace-root `.venv` stays outside Git; commands from `backend/` use `..\.venv\Scripts\python.exe`. Ruff, pytest (3 passed), and mypy passed from this location. The frontend will call the backend over HTTP.
 
 **Not implemented:** authentication, authorization, multi-tenancy, persistence, crawling, extraction, compliance rules, findings, reports, exports, observability.
 

@@ -13,9 +13,11 @@ Concise, durable context for future development sessions. Link to authoritative 
 - The frontend is a **fresh Next.js 16.4.2 create-next-app scaffold**; the only product-specific code is a minimal FastAPI backend.
 - Backend root: `C:\projects\website dpdp analyzer\backend\` — a standalone service outside the frontend repo. Python venv: `.venv` at the workspace root (Python 3.12.0, outside Git).
 - Backend runtime: FastAPI app with `GET /health`; dependencies installed from `backend/requirements.txt` and `backend/requirements-dev.txt`.
-- Git repository is inside `dpdp-compliance-auditor/`, not at the workspace root.
-- Single commit: `d5583f6 Initial commit from Create Next App`.
-- Brain documentation lives at the workspace root in `brain/` and is intentionally outside the app's Git repository.
+- Git repository is at the workspace root and tracks `dpdp-compliance-auditor/`, `backend/`, and `brain/`. The frontend no longer has a nested `.git`.
+- GitHub remote: `https://github.com/Rdhobe/website-dpdp-analyzer-.git`, branch `main`.
+- The original frontend commit was `d5583f6 Initial commit from Create Next App`; the root repo history includes `ec5efce first commit` and `3af8190 Track frontend files instead of embedded repository`.
+- A backup of the removed nested frontend `.git` is at `C:\Users\sec-gen\AppData\Local\Temp\opencode\dpdp-frontend-git-backup-20261019`.
+- Brain documentation lives at the workspace root in `brain/` and is tracked by the root repository.
 - Requirements source: `brain/Project requirements.md`.
 
 ## Current Implementation Status
@@ -86,7 +88,8 @@ See [FEATURES.md](./FEATURES.md) for feature IDs and [TASKS.md](./TASKS.md) for 
 - The repository is earlier than it appears from the requirements: inspect before assuming.
 - `next dev` regenerates the Next.js agent-rules block in `dpdp-compliance-auditor/AGENTS.md`.
 - Next.js 16 behavior may differ from model training data; consult `node_modules/next/dist/docs/`.
-- The brain directory is outside the Git repo, so `git status` in the app will not show brain changes.
+- The workspace root is the Git repository; run Git commands there. Do not create a nested repo in `dpdp-compliance-auditor/`.
+- The nested frontend `.git` was removed because it was recorded as a gitlink, causing GitHub 404s under `dpdp-compliance-auditor/`. Its source files are now tracked directly by the root repo.
 - Keep requirements (`Project requirements.md`) unchanged as the source brief.
 
 ## Pending Work (High Level)

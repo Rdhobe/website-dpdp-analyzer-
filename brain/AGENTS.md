@@ -65,7 +65,7 @@ C:\projects\website dpdp analyzer\
 │   └── app\
 │       ├── api\ crawler\ extraction\ compliance\
 │       ├── legal_sources\ reports\ workers\ security\
-└── dpdp-compliance-auditor\    # Frontend application root (Git repository)
+└── dpdp-compliance-auditor\    # Frontend application (tracked in the root repository)
     ├── public\
     │   ├── images\
     │   └── icons\
@@ -104,7 +104,7 @@ C:\projects\website dpdp analyzer\
 
 **Current state (verified 2026-10-19):** the frontend still has `dpdp-compliance-auditor/app/` at the root, `public/` with default SVGs, and no `src/`, `features/`, `components/`, `lib/`, `hooks/`, `types/`, `config/`, or `.env.example`. The `src/` target is approved but **not implemented**; migration is T-125 in [TASKS.md](./TASKS.md).
 
-The backend lives at `C:\projects\website dpdp analyzer\backend\` as a standalone service, deliberately outside the Next.js app and its Git repository. It contains `app/`, `tests/`, `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`, `main.py`, `.env.example`, `.gitignore`, and `README.md`. The workspace-root `.venv` (outside Git) is the development environment; from `backend/`, invoke it as `..\.venv\Scripts\python.exe`. The frontend must integrate over HTTP, not by importing Python code or nesting the backend inside the app.
+The backend lives at `C:\projects\website dpdp analyzer\backend\` as a standalone service, deliberately outside the Next.js app. Both are tracked by the workspace-root Git repository. It contains `app/`, `tests/`, `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`, `main.py`, `.env.example`, `.gitignore`, and `README.md`. The workspace-root `.venv` (outside Git) is the development environment; from `backend/`, invoke it as `..\.venv\Scripts\python.exe`. The frontend must integrate over HTTP, not by importing Python code or nesting the backend inside the app.
 
 Do not create empty placeholder directories that imply unimplemented features. Create each directory when it receives real code.
 
@@ -235,10 +235,11 @@ Documentation rules:
 
 - Commit only when the user explicitly asks.
 - Stage only intended files.
-- Do not commit `node_modules/`, `.next/`, build output, secrets, or `brain/` content unless requested.
+- Do not commit `node_modules/`, `.next/`, build output, `.venv/`, or secrets. The root repository tracks `brain/` and `backend/`; stage only intended files.
 - Do not amend pushed commits, force-push, or skip hooks.
 - Use a concise, imperative commit message consistent with repository style.
-- Current history: one commit, `d5583f6 Initial commit from Create Next App`.
+- Current history: workspace-root repository on `main`, tracking the frontend, backend, and brain; pushed to GitHub. The original frontend commit was `d5583f6 Initial commit from Create Next App`.
+- Do not initialize a nested Git repository inside `dpdp-compliance-auditor/`. The previous nested `.git` caused GitHub to show a 404 for that path.
 
 ## 12. Definition of Done for Agent Tasks
 

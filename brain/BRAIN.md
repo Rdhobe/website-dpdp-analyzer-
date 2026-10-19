@@ -36,7 +36,7 @@ It is a compliance assessment tool — not a generic scraper, cookie scanner, or
 | APIs | **Partial** — only `GET /health` exists; no product endpoints |
 | Tests | **Partial** — pytest configured with health/config tests; no frontend tests |
 | Docker/infrastructure | **Not implemented** |
-| Git | Initialized; single commit `d5583f6` "Initial commit from Create Next App" |
+| Git | Workspace-root repository on `main`; tracks frontend, backend, and brain; pushed to GitHub |
 
 The requirements brief (`Project requirements.md`) describes the full target system. Treat it as the product requirement source, not as evidence of implementation.
 

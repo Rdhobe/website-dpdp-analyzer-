@@ -2,6 +2,15 @@
 
 Chronological record of meaningful changes. Only verified changes are recorded. No historical entries were fabricated; dates reflect observed evidence or the date of this documentation task.
 
+## 2026-10-19 — Consolidated Git tracking and fixed frontend 404 on GitHub
+
+- **Problem:** The workspace-root commit recorded `dpdp-compliance-auditor/` as a gitlink (`160000`) because the frontend still had its own nested `.git`. GitHub displayed a 404 when opening that path.
+- **Fix:** Moved the nested `.git` to `C:\Users\sec-gen\AppData\Local\Temp\opencode\dpdp-frontend-git-backup-20261019`, removed the gitlink from the index, and added the frontend source files directly to the root repository.
+- **Files added:** workspace-root `.gitignore` for Python, Node/Next.js, environment files, and build output.
+- **Verification:** `git ls-tree HEAD dpdp-compliance-auditor` now reports a tree (`040000`), not a commit. The frontend sources, including `app/`, `public/`, package files, and `README.md`, are tracked by the root repo.
+- **Commit / remote:** `3af8190 Track frontend files instead of embedded repository`, pushed to `origin/main` at `https://github.com/Rdhobe/website-dpdp-analyzer-.git`.
+- **Impact:** The workspace root is now the single Git repository for frontend, backend, and brain. Do not reintroduce a nested `.git` inside `dpdp-compliance-auditor/`.
+
 ## 2026-10-19 — Added backend dependencies and FastAPI foundation
 
 - **Summary:** Created backend dependency manifests and installed them into the existing workspace virtual environment. Added a minimal FastAPI application with configuration and a health endpoint.
