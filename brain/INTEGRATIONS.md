@@ -9,12 +9,16 @@ Only integrations verified in code are listed as implemented. Everything else is
 | Integration | Purpose | Status | Evidence |
 | --- | --- | --- | --- |
 | Google Fonts via `next/font/google` | Load Geist and Geist Mono at build/runtime | **Implemented** | `app/layout.tsx` |
+| Audit engine → target website | Crawl one authorized origin and collect evidence | **Implemented** | `lib/audit/crawler.ts`, `lib/audit/browser.ts` |
+| FastAPI backend | Placeholder health service; the frontend no longer calls it | **Implemented (unused by UI)** | `backend/app/api/health.py` |
 
 Notes:
 
 - `next/font` self-hosts font files in the build output; no runtime API key is required.
-- No other third-party SDKs are installed.
-- No environment variables are defined or consumed.
+- The frontend no longer consumes `NEXT_PUBLIC_API_URL`; the landing-page inspector was removed on 2026-10-19.
+- Backend CORS defaults allow `http://localhost:3000` and `http://127.0.0.1:3000`, but no frontend request reaches the backend.
+- No third-party SDKs or API keys are required for the current audit engine.
+- The target-website integration sends no credentials for public crawls, is bounded by the fixed 5-minute run deadline plus timeout/redirect/body limits, and never submits data forms. When an operator supplies credentials for a detected login wall, Playwright submits only the single-step username/password form and the resulting same-site cookies are reused for that run; credentials are streamed to the worker over stdin and never persisted.
 
 ## 2. Planned Integrations (Requirements)
 
@@ -146,7 +150,23 @@ Provide an `.env.example` with names only once values are actually consumed.
 7. Add tests using mocks; no live external calls in automated tests.
 8. Record significant integration choices in [DECISION.md](./DECISION.md).
 
-## 5. Related Documents
+## 5. Implemented TypeScript Engine Integrations (2026-10-19)
+
+| Integration | Status | Detail |
+| --- | --- | --- |
+| Playwright | Partial | `lib/audit/browser.ts` imports `playwright` dynamically and collects cookies, network requests, consent-control visibility, and servable consent screenshots; `lib/audit/screenshots.ts` captures full-page and element-crop screenshots for findings. Browser binaries were installed locally on 2026-10-19 (`npx playwright install chromium` → Chrome Headless Shell 156); when absent, capture degrades gracefully with a `NOT_ASSESSED`/limitation notice. The dependency is declared in `package.json`. |
+| Cheerio | Implemented | Static HTML parsing in `lib/audit/crawler.ts`. |
+| pdfkit | Implemented | PDF export in `lib/audit/export.ts` (declared, with `@types/pdfkit`). |
+| Zod | Implemented | Request validation in `app/api/audits/route.ts`. |
+| tsx | Implemented | Runs the detached worker (`node node_modules/tsx/dist/cli.mjs workers/audit-worker.ts <runId>`). |
+| Prisma / PostgreSQL | Schema only | `prisma/schema.prisma` defined; no client adapter or migration wired. |
+| Redis / BullMQ | Not implemented | No queue; the launcher spawns a local child process. |
+| Crawlee | Not used | The crawler is a purpose-built bounded `fetch` + Cheerio loop. |
+| LLM provider | Not implemented | Deterministic checks run without AI. |
+
+Environment variables introduced are documented in `dpdp-compliance-auditor/.env.example`: `AUDIT_DATA_DIR`, `AUDIT_ALLOW_PRIVATE_TARGETS`, `AUDIT_STORE`, `DATABASE_URL`, and `AUDIT_BROWSER_ENABLED`.
+
+## 6. Related Documents
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system data flow.
 - [SECURITY.md](./SECURITY.md) — secret handling and AI security.

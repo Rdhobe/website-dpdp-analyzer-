@@ -1,15 +1,15 @@
 # API.md — API Reference
 
-**Status:** Minimal backend implemented; product API not implemented.
+**Status:** The Python backend is a placeholder exposing only `GET /health`; the implemented product API is the Next.js audit API (`/api/audits/**`). The broader product API is not implemented.
 
-A FastAPI service exists with a single health endpoint. No product endpoints, Next.js route handlers, server actions, middleware, or auth exist. Under the approved DEC-008 layout, any thin Next.js route handlers will live in `src/app/api/`. Every endpoint in section 3 and later is **Planned** based on the requirements and must not be called or documented as available.
+The FastAPI service exposes a health check only; the single-page landing analyzer was removed on 2026-10-19. The audit API lives in the Next.js app under `app/api/audits/` (see section 7). Under the approved DEC-008 layout, these route handlers will eventually move to `src/app/api/`. Every endpoint in section 3 and later (other than section 7) is **Planned** based on the requirements and must not be called or documented as available.
 
 ## 1. Current API Surface (Verified)
 
 | Item | State |
 | --- | --- |
-| HTTP API | **Implemented** — FastAPI `GET /health` only |
-| Next.js route handlers (`app/api/`, target `src/app/api/`) | None |
+| Python HTTP API | **Implemented** — `GET /health` plus `/api/audits/**` mirroring the Next.js audit API (list, create, get, credentials, export, screenshots); `POST /api/analyze-landing` was removed |
+| Next.js route handlers (`app/api/`, target `src/app/api/`) | **Implemented** — `app/api/audits/**` under `/api/audits` (see section 7) |
 | Server actions | None |
 | WebSocket/SSE | None |
 | Auth middleware | None |
@@ -35,6 +35,12 @@ A FastAPI service exists with a single health endpoint. No product endpoints, Ne
 - **Reference:** `backend/app/api/health.py`.
 - **Verified:** 2026-10-19 via live Uvicorn request on `127.0.0.1:8010`.
 - **Notes:** This is not a readiness check; it does not verify database or Redis connectivity.
+
+### 1.2 Removed — `POST /api/analyze-landing`
+
+- **Status:** Removed on 2026-10-19 along with the landing-page inspector and its frontend UI.
+- **Former reference:** `backend/app/api/analysis.py`, `backend/app/schemas/landing.py`, `backend/app/services/landing_analyzer.py`, `backend/app/security/url_safety.py` (all deleted).
+- **Replacement:** the Next.js audit engine and `/api/audits/**` routes (section 7).
 
 ## 2. Planned API Conventions
 
@@ -317,7 +323,46 @@ When an endpoint is implemented or changed:
 4. Update [ARCHITECTURE.md](./ARCHITECTURE.md) if the API surface changes materially.
 5. If the contract is generated from code (OpenAPI), link to the generated artifact.
 
-## 7. Related Documents
+## 7. Implemented TypeScript Audit Endpoints (2026-10-19)
+
+Implemented inside the Next.js app under `dpdp-compliance-auditor/app/api/audits/`. These routes are **not authenticated and not tenant-scoped yet**, and long crawls run in a detached worker process (`workers/audit-worker.ts`); the `POST` handler only records a queued run.
+
+| Method | Path | File | Request | Response | Status |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/audits` | `app/api/audits/route.ts` | `{ url, authorized: true, browserEnabled?, screenshots?, notes? }` (Zod-validated) | `202` queued `AuditRun`; `400` for invalid/unsafe targets | Implemented |
+| GET | `/api/audits` | `app/api/audits/route.ts` | none | `{ audits: AuditListItem[] }` | Implemented |
+| GET | `/api/audits/{id}` | `app/api/audits/[id]/route.ts` | none | full `AuditRun` or `404` | Implemented |
+| POST | `/api/audits/{id}/credentials` | `app/api/audits/[id]/credentials/route.ts` | `{ username, password }` (Zod-validated; max 200/500 chars) | `202` `{ id, status }` for a new queued run; `404` unknown run; `409` run is queued/running or detected no login; `400` invalid body | Implemented |
+| GET | `/api/audits/{id}/export?format=json\|csv\|pdf` | `app/api/audits/[id]/export/route.ts` | `format` query parameter (default `json`) | file download or `404` | Implemented |
+| GET | `/api/audits/{id}/screenshots/{name}` | `app/api/audits/[id]/screenshots/[name]/route.ts` | path `name` (validated `*.png`) | `image/png` or `404` for missing/unsafe names | Implemented |
+
+Example response from `POST /api/audits` (shortened):
+
+```json
+{
+  "id": "audit_<uuid>",
+  "status": "queued",
+  "targetUrl": "https://example.com/",
+  "createdAt": "2026-10-19T10:00:00.000Z",
+  "tests": [],
+  "findings": [],
+  "findingGroups": [],
+  "summary": null
+}
+```
+
+Notes:
+
+- A completed `AuditRun` includes `findingGroups` (consolidated findings, see [DEC-015](./DECISION.md)), and each `TestResult` carries a `claimType` plus `summary.coverage` (four independent measures, see [DEC-017](./DECISION.md)). Runs also carry `auth` (`null` for public crawls, otherwise login-wall/authentication metadata; never credential values).
+- `GET /api/audits/{id}/export?format=csv` includes a `claimType` column and a JSON `evidence` column; the PDF includes the full structured evidence, consolidated groups, coverage measures and per-provision legal dates (see [DEC-018](./DECISION.md)).
+- `url` must be `http`/`https`, must not contain embedded credentials, and is resolved and checked against private/reserved address ranges before crawling.
+- There is no `maxPages`/`maxDepth`; crawls follow same-site links until the queue empties or a fixed 5-minute engine budget (`ENGINE_TIME_BUDGET_MS`) expires. `notes` is bounded to 500 characters.
+- A run whose start page is a login wall finishes as `requires_credentials` (no tests) with `auth = { loginWallDetected, loginSurfaceDetected, loginUrl, authenticated: false, failureReason }`. A run whose start page is public but whose crawl reaches a login page finishes normally with `auth.loginSurfaceDetected: true` and offers an optional authenticated run. Posting credentials creates a new run for the same target/config; the endpoint accepts any run that is not `queued`/`running` and whose `auth` detected a login wall or surface. Credentials are streamed to the worker over stdin and are never stored, logged, or returned. Only a single-step username/password form is supported (no MFA/CAPTCHA/SSO). See [DEC-020](./DECISION.md), [DEC-021](./DECISION.md), and [DEC-022](./DECISION.md).
+- The dashboard polls `GET /api/audits/{id}` every 1.5 seconds until the run reaches `completed`, `failed`, `partial`, or `requires_credentials` (`components/audit/audit-live.tsx`). While queued/running the response includes `progress: AuditProgressEntry[]` — timestamped `{ at, level, message, url?, attempted?, succeeded?, failed?, pending? }` entries capped at the last 400 — plus `auth.diagnostics` when a sign-in was attempted.
+- `screenshots` is a boolean audit option. When enabled (default in the UI), the worker captures a full-page screenshot and element crops of the consent interface, privacy/cookie/terms links, contact/grievance link, forms, and primary heading for each crawled page. Screenshot names are generated and validated (`^[A-Za-z0-9][A-Za-z0-9._-]*\.png$`, no `..`); the serving route rejects traversal and returns `404`.
+- No authentication, authorization, rate limiting, or tenant isolation is implemented; see [SECURITY.md](./SECURITY.md).
+
+## 8. Related Documents
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — components.
 - [DATABASE.md](./DATABASE.md) — persisted fields.

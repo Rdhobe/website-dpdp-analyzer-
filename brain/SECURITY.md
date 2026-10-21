@@ -11,16 +11,16 @@ This document separates **confirmed controls** (verified in the current codebase
 | Platform authentication | **Not implemented** |
 | Authorization / tenant isolation | **Not implemented** |
 | Database | None |
-| API surface | None |
-| Crawler / SSRF controls | **Not implemented** |
+| API surface | Python `GET /health`; Next.js `/api/audits/**` (list/create/get/export) and `/api/audits/{id}/screenshots/{name}`; no auth or rate limiting on any |
+| Crawler / SSRF controls | **Partial** — the TypeScript crawler (`lib/audit/url.ts`, `lib/audit/crawler.ts`) validates URLs, revalidates redirects, blocks private/reserved addresses, and bounds crawl size; DNS-rebinding TOCTOU remains a residual risk |
 | Secret management | No secrets present in repository |
-| Environment variables | No `.env` example or runtime env usage |
+| Environment variables | `.env.example` plus pydantic-settings; no real `.env` committed |
 | Security headers | No explicit configuration in `next.config.ts` |
 | Rate limiting | **Not implemented** |
 | Logging/redaction | **Not implemented** |
 | Dependency scanning | No automated vulnerability scanning configured |
 | TLS | Deployment-dependent; local dev uses HTTP on `localhost:3000` |
-| Input validation | No user input handling beyond the default page |
+| Input validation | Pydantic settings validation; Zod validation in the Next.js audit API; outbound URL safety in `lib/audit/url.ts` |
 | CSP | Not configured |
 
 **Confirmed existing controls:**
@@ -30,8 +30,20 @@ This document separates **confirmed controls** (verified in the current codebase
 - ESLint with `eslint-config-next` core-web-vitals and TypeScript rules is configured.
 - React/Next.js default output escaping applies; no `dangerouslySetInnerHTML` is used.
 - No secrets are committed in the application source.
+- Outbound analysis targets are restricted to `http`/`https`; URLs with credentials are rejected.
+- Target hostnames are resolved and every address must be globally routable; loopback, private, link-local, reserved, and metadata-range addresses are rejected.
+- Redirects are followed manually, capped at five, and revalidated before each request.
+- Fetch limits: 10-second timeout, 2 MB body cap, HTML/XHTML content type required.
+- Requests send no cookies or authorization headers; inline script content is not returned.
 
 **Framework baseline:** Next.js 16.4.2, React 19.3.0 — keep patched; security fixes should be applied promptly.
+
+### 1.1 Outbound Fetch Residual Risks
+
+- DNS rebinding between validation and connection is not fully eliminated by resolve-then-request. A hardened crawler should connect to the validated IP or use a network egress proxy.
+- The analysis endpoint is unauthenticated and has no rate limit or per-user quota; add both before exposing it publicly.
+- The endpoint does not execute JavaScript, authenticate, submit forms, or bypass access controls.
+- Crawled content is only parsed for inspection; it is not sent to an LLM.
 
 ## 2. Threat Model
 
@@ -236,3 +248,18 @@ No security tests exist today.
 | SEC-06 | File storage encryption and retention | TBD |
 | SEC-07 | AI provider data-handling and opt-out policy | TBD |
 | SEC-08 | Audit log retention and access controls | TBD |
+
+## 15. Implemented Engine Security Controls (2026-10-20)
+
+Controls implemented in `dpdp-compliance-auditor/lib/audit/`:
+
+- **SSRF / scope:** `lib/audit/url.ts` allows only `http`/`https`, rejects embedded credentials, resolves DNS, and blocks loopback, private, link-local, and reserved IPv4/IPv6 ranges. Redirects are capped and re-validated, and cross-origin redirects are refused. Private targets are permitted only when `AUDIT_ALLOW_PRIVATE_TARGETS=1` or `allowPrivateNetworks` is set (used for synthetic local fixtures in tests).
+- **Bounded crawl:** `lib/audit/crawler.ts` enforces `timeBudgetMs` (fixed 5-minute engine deadline), per-request timeout clamped to the remaining budget, `maxRedirects`, and `maxBytes`, and records failed/blocked/out-of-scope attempts rather than silently skipping them. There is no operator-settable page or depth cap; `maxDepthReached` is statistics only.
+- **Login-wall detection and credentials:** `lib/audit/login-wall.ts` inspects only already-fetched pages (status, URL, heading/text excerpt, password field, login language) and never submits anything; `findLoginSurfaces` reuses the same passive classifier across the crawl, so detecting a login page on a public site performs no additional requests. `lib/audit/auth.ts` supports a single-step username/password form, detects MFA/CAPTCHA/SSO and rejected logins, and returns cookies only for same-site hosts. Credentials travel from `POST /api/audits/{id}/credentials` to the detached worker over the child's stdin, are never written to `run.json`, logs, errors, exports, or the API response, and are discarded after `runAudit` returns. The report records only `auth` metadata and the fact that credentials are not stored.
+- **Redaction:** `lib/audit/redact.ts` replaces emails, phone numbers, Aadhaar-like, PAN-like, and long digit sequences, JWTs, and common API-key patterns in stored text; sensitive query parameters are masked; only a safe allowlist of response headers is stored. Form field values are never stored, only metadata (`redacted: true`).
+- **No mutation:** the engine never submits data forms or performs purchases/irreversible actions. It authenticates only through the operator-supplied single-step sign-in form; browser evidence (when enabled) only clicks accept/reject/withdraw controls in a fresh context and never fills or submits data fields.
+- **Prompt-injection resistance:** rule evaluation is deterministic over structured evidence; page text cannot change test status. A fixture test (`tests/audit/rules.integration.test.ts`, "does not let page text manipulate deterministic results") asserts this.
+- **No secrets in output:** exports (`lib/audit/export.ts`) serialize only stored, redacted evidence.
+- **Screenshot capture and serving:** `lib/audit/screenshots.ts` writes PNGs only under `.data/audits/<runId>/screenshots/`; names are generated and validated against `^[A-Za-z0-9][A-Za-z0-9._-]*\.png$` with `..` rejected. Stored/returned screenshot references carry a name only, never an absolute path. `app/api/audits/[id]/screenshots/[name]/route.ts` resolves and re-checks the path, returning `404` for unsafe or missing names (verified: a `..%2Frun.json` request returned `404`). Screenshots are unfocused on form values (capture does not submit forms or type into fields), but a page may still render personal data in the captured regions.
+
+Residual risks (not yet resolved): DNS-rebinding TOCTOU between resolution and connection; no authentication, authorization, rate limiting, or tenant isolation on `/api/audits*` (including the screenshot-serving and credentials routes), so anyone who can reach the app can submit credentials for any waiting audit; Playwright login navigates the browser outside the fetch-layer SSRF checks; credentials exist in process memory during a run; authenticated cookies are held only in memory for the run but are not separately encrypted; screenshots may contain personal data and are stored unredacted in the local file store; file store is readable by any local process with filesystem access; `npm audit` reports 8 high-severity advisories in frontend dependencies.

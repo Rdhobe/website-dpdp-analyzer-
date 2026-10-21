@@ -22,6 +22,11 @@ build/
 coverage/
 *.tsbuildinfo
 
+# Local audit storage and generated artifacts
+.data/
+dpdp-compliance-auditor/.data/
+dpdp-compliance-auditor/prisma/generated/
+
 # OS
 .DS_Store
 Thumbs.db

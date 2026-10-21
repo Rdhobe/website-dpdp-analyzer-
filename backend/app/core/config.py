@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     debug: bool = False
 
     api_prefix: str = "/api"
-    cors_origins: list[str] = []
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
     database_url: str | None = None
     redis_url: str | None = None

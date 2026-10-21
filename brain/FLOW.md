@@ -2,18 +2,24 @@
 
 **Last updated:** 2026-10-19
 
-Current implementation has exactly one flow: loading the static default landing page. All product flows below are **Proposed** based on the requirements and are not implemented.
+The implemented flow is the audit dashboard: a user submits an authorized URL, the app queues a run, a detached worker crawls and evaluates it, and the results appear in the dashboard. All other product flows below are **Proposed** based on the requirements and are not implemented.
 
 ## 1. Current Flow (Implemented)
 
 ```mermaid
 flowchart LR
-    U["User opens /"] --> N["Next.js serves app/page.tsx"]
-    N --> P["Default create-next-app landing page"]
-    P --> L["Links to Vercel and Next.js documentation"]
+    U["User opens /"] --> D["components/audit/audit-dashboard.tsx"]
+    D --> F["NewAuditForm: enter authorized URL"]
+    F --> A["POST /api/audits (queued AuditRun)"]
+    A --> W["lib/audit/launcher.ts spawns workers/audit-worker.ts"]
+    W --> R["lib/audit/runner.ts: crawl + deterministic rules"]
+    R --> S["lib/audit/store.ts (.data/audits)"]
+    S --> H["Dashboard history + /audits/[id] detail + /audits/compare"]
 ```
 
-There is no navigation, authentication, data collection, crawling, or persistence.
+The earlier single-page landing inspector was removed on 2026-10-19. There is still no authentication, database, or queue; runs are queued in-process and executed by a detached worker, with a file-backed store.
+
+When screenshot capture is enabled, the worker stores a full-page screenshot and element crops under `.data/audits/<runId>/screenshots/`; the detail view renders them for each finding, the browser snapshots, and a run-level gallery via `/api/audits/{id}/screenshots/{name}`.
 
 ## 2. Target End-to-End Audit Flow (Proposed)
 

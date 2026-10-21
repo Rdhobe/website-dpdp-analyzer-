@@ -25,16 +25,16 @@ It is a compliance assessment tool — not a generic scraper, cookie scanner, or
 | --- | --- |
 | Frontend | Next.js 16.4.2 + React 19.3.0 + TypeScript 5 scaffold in `dpdp-compliance-auditor/`; target `src/` feature architecture approved (DEC-008), not yet migrated |
 | Frontend structure | Current: root `app/`. Target: `src/app/` routing + `src/features/`, `src/components/`, `src/lib/`, `src/hooks/`, `src/types/`, `src/config/` (T-125) |
-| Styling | Tailwind CSS 4 via `@tailwindcss/turbopack`; default `app/globals.css` only |
-| Pages | Single default `app/page.tsx` create-next-app landing page |
-| Backend | **Implemented scaffold** — standalone FastAPI app at workspace-root `backend/` with `GET /health`, settings, and dependencies installed |
-| Database | **Not implemented** — SQLAlchemy/Alembic installed, but no PostgreSQL models, migrations, or schema files |
-| Crawler | **Not implemented** — no Crawlee/Playwright code |
-| Compliance engine | **Not implemented** — no rules, legal sources, or analyzers |
+| Styling | Tailwind CSS 4 via `@tailwindcss/turbopack`; custom audit dashboard UI in `components/audit/` |
+| Pages | Home page (`/`) runs the full website audit dashboard (`components/audit/audit-dashboard.tsx`); `/audits` reuses it; `/audits/[id]` and `/audits/compare` for detail and comparison |
+| Backend | **Placeholder** — standalone FastAPI app at workspace-root `backend/` exposing `GET /health` only; the landing-page inspector was removed |
+| Database | **Not implemented** — SQLAlchemy/Alembic installed, but no PostgreSQL models, migrations, or schema files (a Prisma schema exists in the frontend but is not wired) |
+| Crawler | **Implemented in TypeScript** — same-origin crawler in `lib/audit/crawler.ts`, no page/depth caps, fixed 5-minute run budget; Python Crawlee/Playwright are not used |
+| Compliance engine | **Partial** — 75-test versioned deterministic registry in `lib/audit/` with verified legal references; no LLM layer |
 | AI layer | **Not implemented** — no provider, prompts, or extraction pipeline |
 | Auth | **Not implemented** |
-| APIs | **Partial** — only `GET /health` exists; no product endpoints |
-| Tests | **Partial** — pytest configured with health/config tests; no frontend tests |
+| APIs | **Partial** — FastAPI `GET /health`; Next.js `/api/audits` (list/create/get/export) and `/api/audits/{id}/screenshots/{name}` |
+| Tests | **Partial** — 59 frontend tests (Vitest, 9 files) + 3 backend tests (health, config) |
 | Docker/infrastructure | **Not implemented** |
 | Git | Workspace-root repository on `main`; tracks frontend, backend, and brain; pushed to GitHub |
 
@@ -90,7 +90,7 @@ The requirements brief (`Project requirements.md`) describes the full target sys
 
 ## Current Development Priorities
 
-1. **P0 — Finish the backend foundation.** FastAPI is accepted, scaffolded as a standalone service at workspace-root `backend/`, and has `.env.example`; next add database models, migrations, and readiness checks.
+1. **P0 — Harden the audit engine.** Crawling and deterministic checks work; next add auth/tenant isolation, rate limiting, egress hardening, a database adapter, and a queue.
 2. **P0 — Migrate the Next.js scaffold to `src/` (T-125)** without adding placeholder feature pages.
 3. **P0 — Build secure authentication and tenant-aware project CRUD.**
 4. **P0 — Implement the crawler with scope enforcement, limits, and progress tracking.**
@@ -100,6 +100,8 @@ The requirements brief (`Project requirements.md`) describes the full target sys
 8. **P2 — Add AI-assisted analysis with verified legal retrieval.**
 9. **P2 — Add PDF/CSV/JSON exports and regression comparison.**
 10. **P2 — Add automated tests, Docker Compose, and deployment docs.**
+
+**Implemented 2026-10-19, extended 2026-10-20:** a TypeScript evidence-based audit engine now exists inside the Next.js app (`lib/audit/`, `workers/audit-worker.ts`, `app/api/audits/`, `app/audits/`, `components/audit/`) with a 75-test versioned registry, an uncapped crawler bounded by a 5-minute budget, login-wall detection with credential-gated sign-in, deterministic evaluators, file persistence, a worker process, JSON/CSV/PDF exports, and finding screenshots (full-page + element crops served from `/api/audits/{id}/screenshots/{name}`). It is verified by `npx tsc --noEmit`, `npm run lint`, `npm test` (90 passed), and `npm run build`. It does not yet include auth, tenant isolation, rate limiting, a database adapter, or a queue. See [CHANGES_LOG.md](./CHANGES_LOG.md), [DEC-009](./DECISION.md), [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 See [TASKS.md](./TASKS.md) for IDs and acceptance criteria.
 

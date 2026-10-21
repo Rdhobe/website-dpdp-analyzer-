@@ -12,7 +12,7 @@ Status is based on actual source code and test evidence, not on dependencies or 
 
 ## Current Implementation Summary
 
-The frontend remains the default Next.js scaffold. A minimal FastAPI backend foundation now exists (health endpoint, settings, dependencies, three tests). **No product feature is implemented:** there is no database, crawler, compliance engine, AI layer, authentication, product API, or frontend test suite.
+The first product slice is implemented: the home page accepts a public URL, the backend fetches that single page, and the UI displays its elements and privacy signals. There is still no database, multi-page crawler, compliance engine, AI layer, authentication, or frontend test suite.
 
 ---
 
@@ -359,7 +359,63 @@ The frontend remains the default Next.js scaffold. A minimal FastAPI backend fou
 - **Dependencies:** Python 3.12, workspace `.venv`.
 - **Acceptance criteria:** App starts; `GET /health` returns status; lint/type/test checks run.
 - **Evidence:** 2026-10-19 — ruff passed, pytest 3 passed, mypy passed, live `/health` returned `status: ok`.
-- **Limitations:** No database, queue, auth, project API, crawler, or compliance logic. The backend is a standalone service at the workspace root and is not part of the Next.js application.
+- **Limitations:** No database, queue, auth, projects/audits API, crawler, or compliance logic. The backend is a standalone service at the workspace root and is not part of the Next.js application.
+
+---
+
+## F-037 — Landing Page Element Inspector
+
+- **Description:** `POST /api/analyze-landing` fetches one public HTML page and returns metadata, common element counts, headings, links, images, forms and fields, scripts, iframes, and surface-level privacy signals. The Next.js home page provides the URL form and renders the results.
+- **Purpose:** Give users an immediate, evidence-based view of what a landing page contains before building the full audit workflow.
+- **Status:** **Removed** (2026-10-19). The endpoint, backend modules, tests, and frontend UI were deleted; superseded by the TypeScript evidence-based audit engine (see "Implemented Slice" below).
+- **Former files (deleted):** `backend/app/api/analysis.py`, `backend/app/schemas/landing.py`, `backend/app/services/landing_analyzer.py`, `backend/app/security/url_safety.py`, `backend/tests/test_landing_analyzer.py`, `backend/tests/test_analysis_api.py`, `dpdp-compliance-auditor/components/landing-analyzer.tsx`.
+- **Dependencies:** F-036.
+- **Acceptance criteria:** A public HTML URL produces a structured element report; private/loopback targets and non-HTML responses are rejected; the UI displays summary counts, element sections, and privacy signals.
+- **Evidence (observed 2026-10-19):**
+  - Backend: ruff passed; mypy passed; pytest `14 passed`.
+  - Frontend: `npm run lint` passed; `npm run build` passed.
+  - Live API: `https://www.python.org/` returned 200, 14 headings, 150 links, 831 elements, and a detected privacy link.
+- **Limitations:**
+  - Single static HTML response only; no crawling, JavaScript rendering, authenticated pages, or form submission.
+  - Link lists are capped at 150, images at 100, scripts at 100, iframes at 50, forms at 20, and form fields at 50 per form.
+  - No auth, rate limiting, or quota; DNS-rebinding TOCTOU remains a residual SSRF risk.
+  - Privacy signals are keyword/link heuristics, not compliance conclusions.
+- **Related tasks:** T-127.
+
+---
+
+## F-038 — Report Verification and Coverage Transparency
+
+- **Description:** Consolidated findings, explicit claim-type labels, four independent coverage measures, per-provision commencement dates, and full structured evidence in the PDF/CSV exports.
+- **Purpose:** Make exported reports and the dashboard verifiable and honest — no duplicate-looking findings, no best-practice check presented as a legal obligation, no not-yet-in-force provision implied as a current breach, and no single number mistaken for a compliance score.
+- **Status:** **Implemented** (2026-10-19).
+- **Related files:** `lib/audit/groups.ts`, `lib/audit/presentation.ts`, `lib/audit/summary.ts` (`computeAuditCoverage`), `lib/audit/legal.ts`, `lib/audit/registry.ts` (`defaultClaimType`), `lib/audit/runner.ts` (`findingGroups`), `lib/audit/export.ts`, `components/audit/audit-report.tsx`.
+- **Acceptance criteria:** Related checks render as one consolidated finding (all tests still listed); every result carries a `claimType`; coverage is reported as page crawl, site discovery, test execution and evidence sufficiency; each provision shows its own effective date/commencement group; the PDF and CSV include the evidence JSON.
+- **Evidence (observed 2026-10-19):** `npx tsc --noEmit` clean; `npm run lint` clean; `npm test` → 84 passed (12 files); `npm run build` passed.
+- **Limitations:** Groups show the primary test's remediation/reasoning; category `J` items are labelled "regulatory readiness" (covers not-yet-in-force provisions and externally-unverifiable controls).
+- **Related tasks:** T-136; [DEC-015](./DECISION.md)–[DEC-018](./DECISION.md).
+
+## F-039 - Uncapped Crawl Budget and Credential-Gated Continuation
+
+- **Description:** Crawl a site without operator-set page/depth caps until its same-site link graph is exhausted or a fixed 5-minute budget expires, and support sites behind a single username/password login by detecting the wall, prompting for credentials, and running a new authenticated audit.
+- **Purpose:** Cover the whole reachable site while guaranteeing a bounded run, report slow-loading or size-driven truncation honestly, and avoid dead "failed" audits for login-protected sites without storing secrets.
+- **Status:** **Implemented** (2026-10-20).
+- **Related files:** `lib/audit/crawler.ts`, `lib/audit/runner.ts`, `lib/audit/auth.ts`, `lib/audit/login-wall.ts`, `lib/audit/launcher.ts`, `workers/audit-worker.ts`, `app/api/audits/route.ts`, `app/api/audits/[id]/credentials/route.ts`, `components/audit/{new-audit-form,credentials-prompt,audit-report,audit-live,status-badge}.tsx`.
+- **Acceptance criteria:** No max-pages/max-depth inputs or API fields; crawls stop at `ENGINE_TIME_BUDGET_MS` with an explicit limitation and `partial`/`failed` status; a login wall yields `requires_credentials` with 0 tests; a login page discovered on an otherwise public site is surfaced in the report with an optional authenticated run; credentials queue a new run, are streamed over stdin, and never appear in `run.json`; single username/password login succeeds and cookie-authenticated pages are crawled; MFA/CAPTCHA/SSO is refused with a reason; `robots.txt`/`sitemap.xml` status is rendered as a large, labelled card.
+- **Evidence (observed 2026-10-20):** `npx tsc --noEmit` clean; `npm run lint` clean; `npm test` → 94 passed (13 files); `npm run build` passed. Local login fixture: unauth → `requires_credentials`; auth → `completed`, 75 tests, `/privacy` reached. `https://example.com/` → `completed`, 75 tests. Spawned-worker stdin handoff → `completed`, 75 tests, no password value in the stored run. `www.mockmingle.in` run normalizes to `loginSurfaceDetected: true` at `/login`.
+- **Limitations:** Only single-step username/password forms are supported (no MFA, CAPTCHA, or SSO). Large sites are truncated at 5 minutes. Authenticated session/logout behaviour is not modelled beyond reusing cookies for the run.
+- **Related tasks:** T-137; [DEC-019](./DECISION.md)–[DEC-022](./DECISION.md).
+
+## F-040 - Live Run Log and Worker Console Suppression
+
+- **Description:** Persist a timestamped progress log for every audit (worker start, each URL with attempted/fetched/failed/queued counts, sign-in steps, crawl summary, evaluation) and show it live on the audit page. Spawn the worker without a visible Windows console.
+- **Purpose:** Make long crawls observable and diagnosable, and stop a terminal window opening on every run.
+- **Status:** **Implemented** (2026-10-20).
+- **Related files:** `lib/audit/{types,crawler,runner,auth,launcher,store}.ts`, `workers/audit-worker.ts`, `components/audit/{audit-progress,audit-report,audit-live}.tsx`.
+- **Acceptance criteria:** `run.progress` records start/page/complete/login events; the audit page polls every 1.5 s and shows a live log with counts; sign-in diagnostics are stored on `auth` and shown on failures; the worker is spawned with `detached: false` and `windowsHide: true`; legacy runs normalize to an empty log.
+- **Evidence (observed 2026-10-20):** `npx tsc --noEmit` clean; `npm run lint` clean; `npm test` → 94 passed (13 files); `npm run build` passed. Spawned worker against `https://example.com/` persisted 6 progress entries and finished `completed` (1 page, 75 tests).
+- **Limitations:** Link discovery remains static, so client-rendered pages that appear only after JavaScript sign-in may still not be crawled. Browser-based link discovery is not implemented.
+- **Related tasks:** T-138; [DEC-023](./DECISION.md).
 
 ---
 
@@ -396,6 +452,16 @@ flowchart LR
     F021 --> F028[History]
     F028 --> F033[Re-run]
 ```
+
+## Implemented Slice (2026-10-20) — TypeScript Evidence-Based Audit Engine
+
+The landing-page inspector was removed on 2026-10-19. The TypeScript audit engine is now the only analysis slice inside `dpdp-compliance-auditor/`:
+
+- **Implemented:** same-origin crawler with a fixed 5-minute run budget and no page/depth caps (`lib/audit/crawler.ts`); login-wall detection and single username/password sign-in (`lib/audit/login-wall.ts`, `lib/audit/auth.ts`); URL safety (`lib/audit/url.ts`); redaction (`lib/audit/redact.ts`); evidence types (`lib/audit/types.ts`); versioned 75-test registry (`lib/audit/registry.ts`); verified legal references with per-provision commencement (`lib/audit/legal.ts`); deterministic rule evaluators (`lib/audit/rules/`); runner (`lib/audit/runner.ts`); coverage summary, four independent coverage measures, and a plain-language readiness outcome without a compliance score (`lib/audit/summary.ts`, `deriveAuditOutcome`); finding consolidation (`lib/audit/groups.ts`, `lib/audit/presentation.ts`); claim-type labels (`CLAIM_TYPES`); single export dropdown (`components/audit/export-menu.tsx`); file store (`lib/audit/store.ts`); worker queue and stdin credential handoff (`lib/audit/launcher.ts`, `workers/audit-worker.ts`); JSON/CSV/PDF exports with full evidence (`lib/audit/export.ts`); finding screenshots / visual evidence (`lib/audit/screenshots.ts`, `components/audit/screenshot-gallery.tsx`, `app/api/audits/[id]/screenshots/[name]/route.ts`); API routes (`app/api/audits/`); dashboard, detail, and compare pages (`app/audits/`); audit UI components (`components/audit/`).
+- **Partial:** optional Playwright browser evidence (`lib/audit/browser.ts`); browser binaries are now installed locally (`npx playwright install chromium`) but the feature degrades to `NOT_ASSESSED` when they are absent. The Prisma PostgreSQL schema exists but no adapter or migrations are wired.
+- **Not implemented:** Redis/BullMQ queue, LLM analysis, scheduled/recurring audits, organizational-evidence ingestion, authentication, rate limiting, and tenant isolation.
+
+**Verification (observed 2026-10-20):** `npx tsc --noEmit` passed; `npm run lint` passed with no warnings; `npm test` → 90 passed across 13 files; `npm run build` passed.
 
 ## Related Documents
 

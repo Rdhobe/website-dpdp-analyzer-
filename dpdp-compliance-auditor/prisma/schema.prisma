@@ -1,0 +1,126 @@
+// PostgreSQL schema for durable audit persistence.
+// The default local adapter is the file-backed store in lib/audit/store.ts.
+// Set AUDIT_STORE=prisma and DATABASE_URL to use the Prisma adapter once migrations are applied.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AuditRun {
+  id                   String    @id
+  status               String
+  targetUrl            String
+  finalOrigin          String?
+  engineVersion        String
+  registryVersion      String
+  legalFrameworkVersion String
+  config               Json
+  summary              Json?
+  crawlStats           Json?
+  robots               Json?
+  sitemap              Json?
+  browser              Json?
+  limitations          Json
+  errors               Json
+  createdAt            DateTime
+  startedAt            DateTime?
+  completedAt          DateTime?
+
+  pages    AuditPage[]
+  tests    AuditTestResult[]
+  findings AuditFinding[]
+
+  @@index([createdAt])
+  @@index([targetUrl])
+}
+
+model AuditPage {
+  id            String  @id
+  auditId       String
+  requestedUrl  String
+  finalUrl      String
+  status        Int?
+  ok            Boolean
+  contentType   String?
+  title         String?
+  language      String?
+  headers       Json
+  headings      Json
+  textExcerpt   String
+  signals       Json
+  links         Json
+  forms         Json
+  scripts       Json
+  iframes       Json
+  resources     Json
+  thirdPartyHosts Json
+  setCookieNames  Json
+  cookies         Json
+  redirectChain   Json
+  error           String?
+  rendered        Boolean
+  fetchedAt       DateTime
+
+  audit AuditRun @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+}
+
+model AuditTestResult {
+  id                  String   @id
+  auditId             String
+  testId              String
+  title               String
+  category            String
+  categoryName        String
+  status              String
+  severity            String
+  confidence          String
+  affectedUrls        Json
+  evidence            Json
+  legalReferences     Json
+  reasoning           String
+  remediation         String
+  verificationSteps   String
+  humanReviewRequired Boolean
+  testVersion         String
+  knownLimitations    String
+  timestamp           DateTime
+
+  audit AuditRun @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@unique([auditId, testId])
+  @@index([auditId])
+  @@index([status])
+}
+
+model AuditFinding {
+  id                  String   @id
+  auditId             String
+  testId              String
+  title               String
+  category            String
+  status              String
+  severity            String
+  confidence          String
+  affectedUrls        Json
+  evidence            Json
+  legalReferences     Json
+  reasoning           String
+  remediation         String
+  verificationSteps   String
+  humanReviewRequired Boolean
+  testVersion         String
+  knownLimitations    String
+  timestamp           DateTime
+
+  audit AuditRun @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+  @@index([status])
+}

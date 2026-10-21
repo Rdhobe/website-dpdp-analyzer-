@@ -451,7 +451,18 @@ Backups: `TBD`. Encryption at rest: `TBD`. Data residency: `TBD`.
 | DB-07 | Encryption/key management | TBD |
 | DB-08 | Legal corpus ingestion and versioning process | TBD |
 
-## 11. Related Documents
+## 11. Implemented Local Audit Persistence (2026-10-19)
+
+The engine persists each run as a single JSON document by default, not yet in PostgreSQL.
+
+- **File store (implemented):** `dpdp-compliance-auditor/lib/audit/store.ts` writes `<auditId>.json` under `AUDIT_DATA_DIR` (default `dpdp-compliance-auditor/.data/audits`, gitignored). Writes are atomic (`<id>.json.tmp` then rename). Identifiers are validated against `^[A-Za-z0-9_-]+$`.
+- **Screenshot artifacts (implemented):** `lib/audit/screenshots.ts` writes PNGs under `<runId>/screenshots/` inside `AUDIT_DATA_DIR`. Screenshot references in the JSON store carry a generated `name` only; the serving route resolves and validates the name before reading. Screenshots are not stored in the Prisma schema and are not redacted.
+- **Prisma schema (defined, not wired):** `dpdp-compliance-auditor/prisma/schema.prisma` declares PostgreSQL models `AuditRun`, `AuditPage`, `AuditTestResult`, and `AuditFinding`, with JSON columns for nested evidence. No migration exists and no `PrismaClient` adapter is used at runtime.
+- **Adapter switch (planned):** `AUDIT_STORE=prisma` plus `DATABASE_URL` are documented in `dpdp-compliance-auditor/.env.example` as the intended production path.
+
+The proposed relational model in sections 2–6 remains the target; the implemented schema is a simplified, audit-run-centric subset. Tenant isolation, RLS, retention, and backup policies are **not implemented**.
+
+## 12. Related Documents
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system context.
 - [SECURITY.md](./SECURITY.md) — encryption, isolation, retention requirements.

@@ -4,11 +4,11 @@
 
 ## 1. Current Test Status (Verified)
 
-- **Frontend:** no test framework, no `test` script, no test files.
-- **Backend:** pytest/pytest-asyncio/pytest-cov/ruff/mypy installed; health and config tests exist.
+- **Frontend:** Vitest 4 (`vitest.config.mts`), 9 files / 59 tests under `tests/audit/` with synthetic fixture sites.
+- **Backend:** pytest/pytest-asyncio/pytest-cov/ruff/mypy installed; 3 tests cover health and config (the inspector tests were removed).
 - **No CI pipeline exists.**
-- **Executed 2026-10-19:** backend `pytest -q` → 3 passed (one Starlette `httpx` deprecation warning); `ruff check .` passed; `mypy app main.py tests` passed.
-- Frontend quality tooling is ESLint (`npm run lint`) and TypeScript checking via the build.
+- **Executed 2026-10-19:** frontend `npm test` → 59 passed (9 files); `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. Backend `pytest -q` → 3 passed; `ruff check .` passed; `mypy app main.py tests` passed (9 files).
+- Frontend quality tooling is ESLint (`npm run lint`), TypeScript (`npx tsc --noEmit`), and Vitest (`npm test`).
 
 Everything below is a **proposed** test case unless explicitly listed as existing. Do not report these as passing.
 
@@ -36,6 +36,12 @@ Everything below is a **proposed** test case unless explicitly listed as existin
 | `test_health_returns_ok` | `backend/tests/test_health.py` | **Passed** (2026-10-19) |
 | `test_settings_read_cors_origins_from_environment` | `backend/tests/test_config.py` | **Passed** (2026-10-19) |
 | `test_settings_defaults_for_optional_integrations` | `backend/tests/test_config.py` | **Passed** (2026-10-19) |
+| `test_analyze_html_extracts_page_elements` | `backend/tests/test_landing_analyzer.py` | **Removed** (2026-10-19) |
+| `test_ensure_public_url_rejects_unsafe_targets` (7 cases) | `backend/tests/test_landing_analyzer.py` | **Removed** (2026-10-19) |
+| `test_analyze_landing_rejects_invalid_url` | `backend/tests/test_analysis_api.py` | **Removed** (2026-10-19) |
+| `test_analyze_landing_rejects_private_network_target` | `backend/tests/test_analysis_api.py` | **Removed** (2026-10-19) |
+| `test_analyze_landing_returns_elements` | `backend/tests/test_analysis_api.py` | **Removed** (2026-10-19) |
+| Live `POST /api/analyze-landing` smoke test | `https://www.python.org/` | **Removed** (2026-10-19) |
 
 ## 4. Proposed Unit Test Cases
 
@@ -74,8 +80,8 @@ Everything below is a **proposed** test case unless explicitly listed as existin
 
 | ID | Case | Expected |
 | --- | --- | --- |
-| UT-030 | Max depth enforced | no URLs beyond depth queued |
-| UT-031 | Max page count enforced | crawl stops at limit |
+| UT-030 | Run time budget enforced | crawl stops at the 5-minute deadline; run is `partial`/`failed` with a time-limit note |
+| UT-031 | No fixed page/depth cap | all same-site links are followed within the budget |
 | UT-032 | Concurrency bound respected | never exceeds configured value |
 | UT-033 | Delay respected between requests | timestamps comply |
 | UT-034 | Timeout recorded as failure | page status failed/timeout |
@@ -195,7 +201,29 @@ Everything below is a **proposed** test case unless explicitly listed as existin
 - Flaky tests must be fixed or quarantined with an issue reference, not silently retried forever.
 - Security tests must run in CI once the backend exists.
 
-## 10. Related Documents
+## 10. Implemented TypeScript Audit Engine Tests (2026-10-20)
+
+The frontend now has a test framework (Vitest 4) and an automated suite for the audit engine. Command: `npm test` from `dpdp-compliance-auditor/`. Observed result: **13 files, 94 tests passed**.
+
+| File | Coverage |
+| --- | --- |
+| `tests/audit/url.test.ts` | URL normalization, tracking-parameter stripping, default ports, credential/protocol rejection, private/reserved IP ranges, public-target assertion, link resolution and classification, site scope (apex = www) |
+| `tests/audit/registry.test.ts` | 75 unique tests, required definition fields, evaluator for every test, all ten categories covered, supplementary `THIRD-001`/`RETENTION-001`, valid claim type for every test, default claim mappings |
+| `tests/audit/crawler.test.ts` | Same-origin crawl, policy discovery, form parsing with redaction, third-party host and cookie capture, robots/sitemap, partial-run status, external-origin exclusion, same-site redirect followed, off-site redirect refused, run-budget exhaustion with a time-limit error |
+| `tests/audit/login-wall.test.ts` | Login wall from 401, login redirect, password form on a login-labelled page; a homepage login link alone is not a wall; empty page input; `findLoginSurfaces` on a public homepage with a discovered `/login`; `pageLooksLikeLogin` classification; empty input |
+| `tests/audit/rules.integration.test.ts` | Complete-site passes, missing notice fails, consent controls, preselected consent, contradictory notices, missing rights, rights mechanism passes only on a dedicated route, JS-only rendering not assessed, failed pages, missing security headers, prompt-injection resistance |
+| `tests/audit/consent-browser.test.ts` | Pre-consent trackers, post-reject persistence, withdrawal behaviour, tracker classification, accept state, browser-unavailable handling (`NOT_ASSESSED`) |
+| `tests/audit/store.test.ts` | Atomic file persistence, retrieval, listing, unknown identifier, unsafe identifier rejection, missing directory |
+| `tests/audit/export.test.ts` | JSON round-trip, CSV header (incl. `claimType`/`evidence`) and row count, PDF signature and size |
+| `tests/audit/screenshots.test.ts` | Screenshot name safety (rejects traversal/invalid names), per-run directory resolution, and finding attachment by category/URL (element crop + full-page fallback) |
+| `tests/audit/summary.test.ts` | Summary-based readiness outcome (`deriveAuditOutcome`) and the four independent coverage measures (`computeAuditCoverage`): page crawl, site discovery, test execution, evidence sufficiency |
+| `tests/audit/groups.test.ts` | Finding consolidation: related tests grouped, all-non-finding groups omitted, worst status/severity derivation, primary-first ordering, presentation-layer output |
+| `tests/audit/legal.test.ts` | Per-provision commencement dates and groups, Section 6(9) one-year group, all provisions not-yet-effective, `resolveLegalReferences`, phased `COMMENCEMENT_SUMMARY` |
+| `tests/audit/trackers.test.ts` | Tracker classification with matched domain suffix, longest-suffix preference, unknown host, first-party subdomain |
+
+Not yet covered by automated tests: Playwright browser collection and live screenshot capture (manually verified on 2026-10-19/2026-10-20, not unit-tested), the Playwright sign-in flow and credential stdin handoff (validated manually on 2026-10-20), progress-log persistence through the spawned worker (validated manually on 2026-10-20 against `https://example.com/`: 6 entries, `completed`, 1 page, 75 tests), Prisma adapter, worker process lifecycle, API route handlers (including `/api/audits/[id]/credentials`), dashboard/credentials UI, and rate limiting/auth.
+
+## 11. Related Documents
 
 - [TASKS.md](./TASKS.md) — test implementation tasks (T-003, T-110–T-114, T-092, T-096).
 - [FEATURES.md](./FEATURES.md) — features under test.

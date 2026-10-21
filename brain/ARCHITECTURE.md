@@ -23,25 +23,25 @@ flowchart LR
 - Application root: `dpdp-compliance-auditor/`.
 - App Router with `app/` directory (target `src/app/` per DEC-008, migration T-125).
 - `app/layout.tsx` defines metadata and loads Geist/Geist Mono via `next/font/google`.
-- `app/page.tsx` is the unmodified create-next-app landing page.
-- `app/globals.css` imports Tailwind and defines light/dark background and foreground variables.
+- `app/page.tsx` renders the audit dashboard (`components/audit/audit-dashboard.tsx`); the landing-page inspector was removed on 2026-10-19.
+- `app/globals.css` imports Tailwind, defines light/dark variables, and uses the Geist font family.
 - `next.config.ts` enables `cacheComponents`, `partialPrefetching`, `experimental.agentFeedback`, and a Turbopack CSS rule.
-- No `app/api/` routes, server actions, middleware, or data access layer exist.
+- The frontend no longer calls the Python backend. It exposes its own audit routes under `app/api/audits/**` and stores runs via `lib/audit/store.ts`.
 
 **Verified facts — backend (implemented scaffold):**
 
 - Backend root: `C:\projects\website dpdp analyzer\backend\` (workspace root, a standalone service outside the Next.js app; both are tracked in the root Git repository). The virtual environment is `C:\projects\website dpdp analyzer\.venv` (Python 3.12.0, outside Git).
 - `backend/app/main.py` creates the FastAPI application; `backend/app/core/config.py` loads settings from environment/`.env`.
-- `GET /health` returns service status, name, version, and environment.
-- `backend/app/api/health.py` contains the only route.
+- `GET /health` returns service status, name, version, and environment. This is the only endpoint; `POST /api/analyze-landing` and its schemas/services/security helpers were removed on 2026-10-19.
+- `backend/app/api/` contains only the health route; `backend/app/main.py` registers it.
 - Runtime and dev dependencies are installed; see `backend/requirements.txt` and `backend/requirements-dev.txt`.
 - `backend/.env.example` documents settings; `backend/.gitignore` excludes `.env`, caches, and build output.
-- No database connection, migrations, queue, crawler, auth, compliance rules, or AI provider exists.
-- Playwright package is installed, but browser binaries have not been downloaded.
+- No database connection, migrations, queue, auth, compliance rules, or AI provider exists in the Python backend.
+- The backend is a placeholder; the audit engine (crawl, rules, store, worker, exports) lives in the Next.js app in TypeScript.
 
-**Location resolved (2026-10-19):** the backend remained at the workspace root as a separate service. It is **not** mixed into the Next.js app. The workspace root is a single Git repository tracking the frontend, backend, and brain. The workspace-root `.venv` stays outside Git; commands from `backend/` use `..\.venv\Scripts\python.exe`. Ruff, pytest (3 passed), and mypy passed from this location. The frontend will call the backend over HTTP.
+**Location resolved (2026-10-19):** the backend remained at the workspace root as a separate service. It is **not** mixed into the Next.js app. The workspace root is a single Git repository tracking the frontend, backend, and brain. The workspace-root `.venv` stays outside Git; commands from `backend/` use `..\.venv\Scripts\python.exe`. Ruff, pytest (3 passed), and mypy passed from this location. The frontend no longer calls the backend.
 
-**Not implemented:** authentication, authorization, multi-tenancy, persistence, crawling, extraction, compliance rules, findings, reports, exports, observability.
+**Not implemented (backend):** authentication, authorization, multi-tenancy, persistence, and a queue. The Next.js app separately implements a bounded TypeScript crawler, deterministic rules, a file store, a worker, and exports.
 
 ## 2. Target Architecture (Planned per Requirements)
 
@@ -449,7 +449,44 @@ No Docker, deployment config, or environment examples exist today. Hosting targe
 | AQ-07 | Deployment target (Vercel + managed services, containers, etc.)? | TBD |
 | AQ-08 | When should the scaffold migrate from root `app/` to `src/app/` and feature modules? | Tracked as T-125 |
 
-## 9. Related Documents
+## 9. Implemented TypeScript Audit Engine (2026-10-20)
+
+A second server-side slice exists inside the Next.js app. On 2026-10-19 it became the only analysis path: the Python landing-page inspector was removed and the home page now runs the full audit. On 2026-10-20 it gained an uncapped crawler with a fixed 5-minute budget and a credential-gated login path.
+
+```
+Browser (React)
+  └─ /audits, /audits/[id], /audits/compare  (components/audit/*)
+       │ POST/GET
+       ▼
+Next.js route handlers (app/api/audits/**, incl. /credentials)
+       | writes queued AuditRun; streams credentials to worker stdin
+       |
+File store (lib/audit/store.ts, .data/audits/*.json)
+       | spawns detached process
+       |
+workers/audit-worker.ts (tsx)
+       +- lib/audit/runner.ts
+            +- lib/audit/crawler.ts      (fetch + Cheerio; 5-min budget, no page/depth caps)
+            +- lib/audit/login-wall.ts   (detect sign-in wall on the start page)
+            +- lib/audit/auth.ts         (optional Playwright single username/password login)
+            +- lib/audit/browser.ts      (optional Playwright, dynamic import)
+            +- lib/audit/screenshots.ts  (Playwright full-page + element crops)
+            +- lib/audit/rules/*         (deterministic evaluators)
+            +- lib/audit/legal.ts        (verified references, per-provision effective dates)
+            +- lib/audit/groups.ts       (consolidate related findings)
+            +- lib/audit/presentation.ts (shared finding view for UI + export)
+            +- lib/audit/summary.ts      (status counts + four coverage measures, no score)
+```
+
+When no credentials are supplied and the start page is a sign-in wall, `runAudit` returns `requires_credentials` with no tests. `POST /api/audits/{id}/credentials` queues a new run and writes the credentials JSON to the worker's piped stdin; the worker parses them, signs in with Playwright, and passes the resulting cookie header and storage state to the crawler, browser collection, and screenshots. Credentials never appear in the run file, logs, exports, or API responses.
+
+Screenshots are written under `.data/audits/<runId>/screenshots/` and served back through `app/api/audits/[id]/screenshots/[name]/route.ts` (traversal-safe name validation); `components/audit/screenshot-gallery.tsx` renders them in findings, browser snapshots, and a run-level gallery. Screenshot references use generated names only — absolute filesystem paths are never stored or returned.
+
+Key invariants honored: crawler/server code is server-side only; deterministic checks do not depend on the LLM; crawled content is never executed as instructions; missing evidence never becomes `PASS`; no compliance score is produced; the engine reports `NOT_ASSESSED` rather than guessing.
+
+The Prisma PostgreSQL schema (`dpdp-compliance-auditor/prisma/schema.prisma`) is defined but no adapter or migrations are wired; the default adapter is the local JSON file store. Redis/BullMQ and Crawlee are not used. See [DEC-009](./DECISION.md).
+
+## 10. Related Documents
 
 - [PRD.md](./PRD.md) — requirements and scope.
 - [DECISION.md](./DECISION.md) — decision history.

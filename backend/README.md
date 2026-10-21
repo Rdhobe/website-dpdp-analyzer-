@@ -1,8 +1,8 @@
 # Backend — DPDP Website Compliance Auditor
 
-Standalone FastAPI service for the DPDP Website Compliance Auditor. It is intentionally separate from the Next.js frontend at `../dpdp-compliance-auditor/` and communicates with it over HTTP.
+Standalone FastAPI service for the DPDP Website Compliance Auditor. It is intentionally separate from the Next.js frontend at `../dpdp-compliance-auditor/` and communicates over HTTP.
 
-> **Status:** Scaffold only. The service exposes a health check and configuration. Database, queue, crawler, authentication, compliance rules, and reporting are not implemented.
+> **Status:** Placeholder service. Only a health check is implemented. The landing-page inspector was removed: crawling, compliance rules, reporting, persistence, and the audit engine now live in the TypeScript frontend app (`../dpdp-compliance-auditor/`). Database, queue, and authentication are not implemented here.
 
 ## Requirements
 
@@ -57,8 +57,8 @@ Settings are loaded by `app/core/config.py` using pydantic-settings from environ
 | `APP_VERSION` | `0.1.0` | API version |
 | `ENVIRONMENT` | `development` | Environment label |
 | `DEBUG` | `false` | Debug flag |
-| `API_PREFIX` | `/api` | Reserved for product routes |
-| `CORS_ORIGINS` | `[]` | JSON array, e.g. `["http://localhost:3000"]` |
+| `API_PREFIX` | `/api` | Reserved for future product routes |
+| `CORS_ORIGINS` | `["http://localhost:3000", "http://127.0.0.1:3000"]` | JSON array of allowed frontend origins |
 | `DATABASE_URL` | unset | PostgreSQL async URL |
 | `REDIS_URL` | unset | Redis URL |
 
@@ -74,7 +74,7 @@ From this directory:
 ..\.venv\Scripts\python.exe -m mypy app main.py tests
 ```
 
-Current tests cover the health endpoint and settings parsing. A Starlette deprecation warning about `httpx` may appear; tests still pass.
+The tests cover the health endpoint and settings parsing.
 
 ## Layout
 
@@ -97,6 +97,6 @@ backend/
 
 ## Boundaries
 
-- Keep this service independent of the Next.js frontend. The frontend should call it over HTTP; do not place Python code inside `dpdp-compliance-auditor/`.
+- Keep this service independent of the Next.js frontend. Do not place Python code inside `dpdp-compliance-auditor/`.
 - Do not add secrets, `.env` files, or virtual environments to version control.
-- No compliance or legal claims should be produced until the rules engine and evidence model exist.
+- No compliance or legal claims should be produced until a rules engine and evidence model exist.
